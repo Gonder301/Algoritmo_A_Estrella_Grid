@@ -3,16 +3,15 @@
 #include <random>
 #include <vector>
 #include <set>
-#include <unordered_set>
 
 struct Casilla {
 	sf::RectangleShape casilla;
+	bool obstaculo;
+	sf::Vector2i pos;
+	bool visitado;
 	std::vector<Casilla*> vecinos;
 	Casilla* predecesor;
 	int h, g;
-	sf::Vector2i pos;
-	bool visitado = false;
-	bool obstaculo = false;
 };
 
 struct CompararCasilla {
@@ -28,64 +27,71 @@ struct CompararCasilla {
 	}
 };
 
-sf::Color colorBase(sf::Color(50, 50, 220));
-const int nHorizontal = 15;
-const int nVertical = 15;
-const float lado = 25;
+sf::Color colorCasillaBase(sf::Color(50, 50, 220));
+sf::Color colorCasillaOscuro(sf::Color(25, 25, 110));
+const int nHorizontal = 16;
+const int nVertical = 16;
+const float ladoCasilla = 25.f;
 const float marco = 10.f;
 Casilla grid[nVertical][nHorizontal];
-std::set<Casilla*, CompararCasilla> casillasPorVisitar;
-Casilla* casillaInicial = nullptr;
+Casilla* casillaInicio = nullptr;
 Casilla* casillaDestino = nullptr;
-bool diagonalActivo = false;
+std::set<Casilla*, CompararCasilla> casillasPorVisitar;
+bool movimientoDiagonalActivo = false; // No se puede cambiar durante la ejecución del programa.
 bool heuristicoActivo = true;
-std::vector<sf::RectangleShape*> camino;
-
-void generarCamino() {
-	Casilla* it = casillaDestino;
-	sf::RectangleShape* casilla = nullptr;
-	do {
-		casilla = new sf::RectangleShape(sf::Vector2f(lado, lado));
-		casilla->setFillColor(sf::Color::Green);
-		casilla->setPosition(it->casilla.getPosition());
-		camino.push_back(casilla);
-		it = it->predecesor;
-	} while (it != nullptr);
-}
+const int maxDistanciaManhattan = nHorizontal + nVertical - 2;
 
 int distanciaManhattan(sf::Vector2i pos1, sf::Vector2i pos2) {
 	return abs(pos2.x - pos1.x) + abs(pos2.y - pos1.y);
 }
 
-void inicializarGrid() {
+void inicializarGrid(bool reinicio = false) {
 	for (int i = 0; i < nVertical; i++) {
 		for (int j = 0; j < nHorizontal; j++) {
-			grid[i][j].pos = sf::Vector2i(i, j);
+			grid[i][j].g = std::numeric_limits<int>::max();
 			grid[i][j].predecesor = nullptr;
-			grid[i][j].casilla.setSize(sf::Vector2f(lado, lado));
-			grid[i][j].casilla.setPosition(j * (lado + 10), i * (lado + 10));
-			grid[i][j].casilla.setFillColor(colorBase);
+			grid[i][j].visitado = false;
+
+			if (reinicio) continue;
+
+			grid[i][j].obstaculo = false;
+			grid[i][j].pos = sf::Vector2i(i, j);
+			grid[i][j].casilla.setSize(sf::Vector2f(ladoCasilla, ladoCasilla));
+			grid[i][j].casilla.setPosition(j * (ladoCasilla + 10), i * (ladoCasilla + 10));
+			grid[i][j].casilla.setFillColor(colorCasillaBase);
+			grid[i][j].casilla.setOutlineColor(sf::Color::White);
 
 			if (j > 0)                grid[i][j].vecinos.push_back(&grid[i][j - 1]);  // Izquierda
 			if (j < nHorizontal - 1)  grid[i][j].vecinos.push_back(&grid[i][j + 1]);  // Derecha
 			if (i > 0)                grid[i][j].vecinos.push_back(&grid[i - 1][j]);  // Arriba
 			if (i < nVertical - 1)    grid[i][j].vecinos.push_back(&grid[i + 1][j]);  // Abajo
 
-			if (diagonalActivo) {
+			if (movimientoDiagonalActivo) {
 				if (i > 0 && j > 0)								grid[i][j].vecinos.push_back(&grid[i - 1][j - 1]);
 				if (i > 0 && j < nHorizontal - 1)				grid[i][j].vecinos.push_back(&grid[i - 1][j + 1]);
 				if (i < nVertical - 1 && j > 0)					grid[i][j].vecinos.push_back(&grid[i + 1][j - 1]);
 				if (i < nVertical - 1 && j < nHorizontal - 1)	grid[i][j].vecinos.push_back(&grid[i + 1][j + 1]);
 			}
-			grid[i][j].g = std::numeric_limits<int>::max();
 		}
 	}
 }
 
-void cambiarColorBase() {
+void limpiarGridAlgoritmo(bool algoritmoFinalizado_) {
 	for (int i = 0; i < nVertical; ++i) {
 		for (int j = 0; j < nHorizontal; ++j) {
-			if (!grid[i][j].obstaculo) grid[i][j].casilla.setFillColor(colorBase);
+			if (&grid[i][j] == casillaDestino) continue;
+			if (&grid[i][j] == casillaInicio) continue;
+			if (!grid[i][j].obstaculo) {
+				grid[i][j].casilla.setFillColor(colorCasillaBase);
+			}
+			else {
+				continue;
+			}
+			if (algoritmoFinalizado_) {
+				if (!grid[i][j].visitado) {
+					grid[i][j].casilla.setFillColor(colorCasillaOscuro);
+				}
+			}
 		}
 	}
 }
@@ -94,6 +100,14 @@ void inicializarHeuristicos() {
 	for (int i = 0; i < nVertical; ++i) {
 		for (int j = 0; j < nHorizontal; ++j) {
 			grid[i][j].h = distanciaManhattan(grid[i][j].pos, casillaDestino->pos);
+		}
+	}
+}
+
+void limpiarHeuristicos() {
+	for (int i = 0; i < nVertical; ++i) {
+		for (int j = 0; j < nHorizontal; ++j) {
+			grid[i][j].h = 0;
 		}
 	}
 }
@@ -110,9 +124,10 @@ void crearObstaculo(sf::Vector2f mousePos) {
 	for (int i = 0; i < nVertical; ++i) {
 		for (int j = 0; j < nHorizontal; ++j) {
 			if (grid[i][j].casilla.getGlobalBounds().contains(mousePos)) {
+				if (&grid[i][j] == casillaInicio || &grid[i][j] == casillaDestino) return;
 				if (grid[i][j].obstaculo) {
 					grid[i][j].obstaculo = false;
-					grid[i][j].casilla.setFillColor(colorBase);
+					grid[i][j].casilla.setFillColor(colorCasillaBase);
 				}
 				else {
 
@@ -130,24 +145,45 @@ void selecionarCasilla(sf::Vector2f mousePos, Casilla*& box_, sf::Color color_) 
 		for (int j = 0; j < nHorizontal; ++j) {
 			if (grid[i][j].casilla.getGlobalBounds().contains(mousePos)) {
 				if (box_) {
-					box_->casilla.setFillColor(colorBase);
+					box_->casilla.setFillColor(colorCasillaBase);
+					box_->casilla.setOutlineThickness(0.f);
 				}
-				grid[i][j].casilla.setFillColor(color_);
 				box_ = &grid[i][j];
+				box_->casilla.setFillColor(color_);
+				box_->casilla.setOutlineThickness(2.f);
 				return;
 			}
 		}
 	}
 }
 
+void colorearCasillas(Casilla* casilla_) {
+	if (casilla_ == casillaInicio) return;
+	float factor = 1.f - (static_cast<float>(casilla_->h) / maxDistanciaManhattan);
+	int r = casillaDestino->casilla.getFillColor().r * factor;
+	int g = casillaDestino->casilla.getFillColor().g * factor;
+	int b = casillaDestino->casilla.getFillColor().b * factor;
+	casilla_->casilla.setFillColor(sf::Color(r, g, b));
+}
+
+void mostrarCamino() {
+	if (casillaDestino->predecesor == nullptr) return;
+	Casilla* it = casillaDestino->predecesor;
+	sf::Color colorCamino = casillaDestino->casilla.getFillColor();
+	while (it->predecesor != nullptr) {
+		it->casilla.setFillColor(colorCamino);
+		it = it->predecesor;
+	}
+}
+
 bool algoritm_A_Estrella() {
 	if (casillasPorVisitar.empty()) {
-		std::cout << "No se encontró ningún camino entre las casillas." << std::endl;
+		std::cout << "No existe un camino entre ambas casillas." << std::endl;
 		return false;
 	}
 
 	Casilla* n = *casillasPorVisitar.begin();  // Tomar el nodo con menor costo f = g + h
-	n->casilla.setFillColor(sf::Color::Magenta);
+	colorearCasillas(n);
 	casillasPorVisitar.erase(casillasPorVisitar.begin());  // Eliminarlo del conjunto
 
 	int temp_g = 0;
@@ -177,8 +213,8 @@ bool algoritm_A_Estrella() {
 
 int main()
 {
-	const int window_width = (lado * nHorizontal) + (marco * nHorizontal - marco);
-	const int window_height = (lado * nVertical) + (marco * nVertical - marco);
+	const int window_width = (ladoCasilla * nHorizontal) + (marco * nHorizontal - marco);
+	const int window_height = (ladoCasilla * nVertical) + (marco * nVertical - marco);
 	sf::RenderWindow window(sf::VideoMode(window_width, window_height), "SFML Window");
 
 	bool ctrlPresionado = false;
@@ -187,6 +223,15 @@ int main()
 	bool algoritmoFinalizado = false;
 	inicializarGrid();
 	const float t = 0.01f;
+
+	std::cout << "Controles:" << std::endl;
+	std::cout << "Click Izq <--- Crear/Eliminar obstaculo" << std::endl;
+	std::cout << "Ctrl + Click Izq <--- Seleccionar nodoInicio" << std::endl;
+	std::cout << "Alt + Click Izq <--- Seleccionar nodoFinal" << std::endl;
+	std::cout << "S <--- Iniciar algoritmo" << std::endl;
+	std::cout << "Tab <--- Cambiar algoritmo" << std::endl;
+	std::cout << "R <--- Reiniciar variables.\n\n";
+	std::cout << "Algoritmo activo: " << ((heuristicoActivo) ? "A*" : "Dijkstra") << std::endl;
 
 	float delta = 0.f;
 	sf::Clock clock;
@@ -222,7 +267,7 @@ int main()
 
 				if (event.mouseButton.button == sf::Mouse::Left) {
 					if (ctrlPresionado) {
-						selecionarCasilla(mousePos, casillaInicial, sf::Color::Red);
+						selecionarCasilla(mousePos, casillaInicio, sf::Color::Red);
 					}
 					else if (altPresionado) {
 						selecionarCasilla(mousePos, casillaDestino, sf::Color::Green);
@@ -238,9 +283,22 @@ int main()
 					if (heuristicoActivo) {
 						inicializarHeuristicos();
 					}
-					casillaInicial->g = 0;
-					casillasPorVisitar.insert(casillaInicial);
+					else {
+						limpiarHeuristicos();
+					}
+					casillaInicio->g = 0;
+					casillasPorVisitar.insert(casillaInicio);
 					algoritmoActivo = true;
+				}
+				else if (event.key.code == sf::Keyboard::Tab) {
+					heuristicoActivo = !heuristicoActivo;
+					std::cout << "Algoritmo activo: " << ((heuristicoActivo) ? "A*" : "Dijkstra") << std::endl;
+				}
+				else if (event.key.code == sf::Keyboard::R) {
+					inicializarGrid(true);
+					casillasPorVisitar.clear();
+					algoritmoFinalizado = false;
+					limpiarGridAlgoritmo(algoritmoFinalizado);
 				}
 			}
 			default:
@@ -252,10 +310,9 @@ int main()
 		if (delta >= t) {
 			if (algoritmoActivo) {
 				if (!(algoritmoActivo = algoritm_A_Estrella())) {
-					std::cout << "fin" << std::endl;
-					cambiarColorBase();
-					generarCamino();
 					algoritmoFinalizado = true;
+					limpiarGridAlgoritmo(algoritmoFinalizado);
+					mostrarCamino();
 				}
 			}
 			delta = 0.f;
@@ -263,12 +320,6 @@ int main()
 
 		window.clear(sf::Color::Black);
 		mostrarGrid(window);
-
-		if (algoritmoFinalizado) {
-			for (auto& it : camino) {
-				window.draw(*it);
-			}
-		}
 		window.display();
 	}
 }
