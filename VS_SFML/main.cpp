@@ -37,7 +37,7 @@ Casilla grid[nVertical][nHorizontal];
 Casilla* casillaInicio = nullptr;
 Casilla* casillaDestino = nullptr;
 std::set<Casilla*, CompararCasilla> casillasPorVisitar;
-bool movimientoDiagonalActivo = false; // No se puede cambiar durante la ejecución del programa.
+bool movimientoDiagonalActivo = false; // No se puede cambiar durante la ejecuciÃ³n del programa.
 bool heuristicoActivo = true;
 const int maxDistanciaManhattan = nHorizontal + nVertical - 2;
 
@@ -176,7 +176,7 @@ void mostrarCamino() {
 	}
 }
 
-bool algoritm_A_Estrella() {
+bool algoritmo_A_Estrella() {
 	if (casillasPorVisitar.empty()) {
 		std::cout << "No existe un camino entre ambas casillas." << std::endl;
 		return false;
