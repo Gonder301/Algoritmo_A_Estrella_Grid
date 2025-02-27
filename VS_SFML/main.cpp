@@ -309,7 +309,7 @@ int main()
 		delta += clock.restart().asSeconds();
 		if (delta >= t) {
 			if (algoritmoActivo) {
-				if (!(algoritmoActivo = algoritm_A_Estrella())) {
+				if (!(algoritmoActivo = algoritmo_A_Estrella())) {
 					algoritmoFinalizado = true;
 					limpiarGridAlgoritmo(algoritmoFinalizado);
 					mostrarCamino();
